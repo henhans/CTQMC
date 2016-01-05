@@ -1,5 +1,4 @@
 #include <queue>
-#include <iostream>
 using namespace std;
 
 typedef map<int, queue<double> > map_of_queue; // data structure for a map of queue
@@ -13,10 +12,10 @@ class Time_config{
 
 public:
    // constructor
-   Time_config(int fl){
-     flavor = fl;
-     for (int i=0; i<fl; i++) {
-       clog << "setup queue for flavor:" << i << endl;
+   Time_config(int fl_){
+     flavor = fl_;
+     for (int i=0; i<fl_; i++) {
+       clog << "initial empty time queue for flavor:" << i << endl;
        queue<double> empty;// temperory empty queue
        t_start[i] = empty;
        t_end[i] = empty;
