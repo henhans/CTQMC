@@ -1,2 +1,2 @@
 # CTQMC
-CTQMC for Anderson model segment update
+CTQMC for Anderson model segment update. Constructing...
