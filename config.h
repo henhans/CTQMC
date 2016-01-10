@@ -29,8 +29,10 @@ class Time_config{
     bool is_empty(int fl_) { return ( t_start[fl_].empty() && t_end[fl_].empty() ); };
     // get number of flavor
     int get_flavor() { return flavor; };
+    // get current order for flavor
+    int get_pertur_order(int fl_) { return t_start[fl_].size(); };
 
-    // insert time
+    // insert time sector
     pair<bool, int> try_insert_start_time ( int fl_, double ts_);//check if the propose starting time can be inserted
     //then return the bolean constant if ts ca be insert and the index for insertion
     void insert_start_time ( int fl_, int index_ , double ts_);//insert the starting time
@@ -38,19 +40,19 @@ class Time_config{
     //return the next starting time for generate random te and the index for insertion
     void insert_end_time ( int fl_, int index_ ,double te_);//insert the end time
 
-    // remove time
-
+    // remove time sector
+    void remove_time_sector(int fl_, int index_);
 };
 
 void Time_config::print_config( int fl_) {
     clog << "t start config:" << endl;
     for (deque<double>::iterator it = t_start[fl_].begin(); it!=t_start[fl_].end(); ++it)
-        clog << ' ' << *it;
+        clog << ' ' << setprecision(9) << *it;
     cout << '\n';
 
     clog << "t end config:" << endl;
     for (deque<double>::iterator it = t_end[fl_].begin(); it!=t_end[fl_].end(); ++it)
-        clog << ' ' << *it;
+        clog << ' ' << setprecision(9) << *it;
     cout << '\n';
 
 }
@@ -60,23 +62,33 @@ pair<bool, int> Time_config::try_insert_start_time( int fl_, double ts_) {
     else{
         //bool accept = false;
         //int index = -1;
+
         //find if the ts insertion is allowed and return the acceptance condition and the index
         int ts_size = t_start[fl_].size();
-        for(int i=0; i < ts_size; i++) {
+        //check if the propose time sector is locate at the periodic sector
+        if( (t_end[fl_][ts_size-1] < t_start[fl_][ts_size-1]) && (ts_ > t_start[fl_][ts_size-1] || ts_ <
+            t_end[fl_][ts_size-1]) )
+            return make_pair(false,-1);
+
+        for(int i=0; i < ts_size; i++) {// then locate the insertion time
             //clog << t_start[fl_][i] << " "<< t_end[fl_][(i-1+ts_size)%ts_size] << endl;
-            if(ts_ < t_start[fl_][i] && ts_ > t_end[fl_][(i-1+ts_size)%ts_size] )
+            if( ts_ == t_start[fl_][i] )
+                return make_pair(false,-1);
+            else if (ts_< t_start[fl_][i] && ts_< t_end[fl_][i-1] && i>0)//
+                return make_pair(false,-1);
+            else if(ts_ < t_start[fl_][i] && ts_ > t_end[fl_][(i-1+ts_size)%ts_size] )
                 return make_pair(true,i);
             else if (ts_ < t_start[fl_][i] && ts_ < t_end[fl_][(i-1+ts_size)%ts_size] )
                 return make_pair(true,i);
         }
-        if(ts_ > t_end[fl_][ts_size-1]) return make_pair(true,ts_size-1);
+        if(ts_ > t_end[fl_][ts_size-1]) return make_pair(true,ts_size);
         else return make_pair(false,-1);
     };
 };
 
 void Time_config::insert_start_time ( int fl_, int index_ ,double ts_ ) {
     if( index_==-1 ) t_start[fl_].push_front(ts_);
-    else if( index_== t_start[fl_].size()-1 ) t_start[fl_].push_back(ts_);
+    else if( index_== t_start[fl_].size() ) t_start[fl_].push_back(ts_);
     else{// insert ts at specific position
         deque <double>::iterator Iter=t_start[fl_].begin();
         for(int i=0; i<index_; i++) Iter++;
@@ -101,3 +113,9 @@ void Time_config::insert_end_time( int fl_, int index_, double te_) {
     };
 
 }
+
+void Time_config::remove_time_sector(int fl_, int index_) {
+    t_start[fl_].erase( t_start[fl_].begin() + index_ );
+    t_end[fl_].erase( t_end[fl_].begin() + index_ );
+};
+
