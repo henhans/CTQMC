@@ -23,6 +23,10 @@ class Time_config{
         };
     };
 
+    // operators
+    // copy configurations
+    Time_config& operator=( Time_config& rhs);
+
     // print out time configuration for each flavor
     void print_config(int fl_);
     // check if the time configuration for flavor i is empty
@@ -31,6 +35,10 @@ class Time_config{
     int get_flavor() { return flavor; };
     // get current order for flavor
     int get_pertur_order(int fl_) { return t_start[fl_].size(); };
+    // get t_start element
+    double get_t_start_at(int fl_, int indx) { return t_start[fl_][indx]; };
+    // get t_end element
+    double get_t_end_at(int fl_, int indx) { return t_end[fl_][indx]; } ;
 
     // insert time sector
     pair<bool, int> try_insert_start_time ( int fl_, double ts_);//check if the propose starting time can be inserted
@@ -42,7 +50,26 @@ class Time_config{
 
     // remove time sector
     void remove_time_sector(int fl_, int index_);
+
+    
 };
+
+Time_config& Time_config::operator = ( Time_config& rhs ) {
+
+    flavor = rhs.get_flavor();
+
+    for(int ifl=0; ifl<flavor ; ifl++) {// for each flavor
+        t_start[ifl].clear();// clear t_start
+        t_end[ifl].clear();// clear t_end
+        for(int i=0; i<rhs.get_pertur_order(ifl); i++) {
+            t_start[ifl].push_back(rhs.t_start[ifl][i]);// copy t_start
+            t_end[ifl].push_back(rhs.t_end[ifl][i]);// copy t_end
+        }
+    }
+
+    return *this;
+};
+
 
 void Time_config::print_config( int fl_) {
     clog << "t start config:" << endl;
