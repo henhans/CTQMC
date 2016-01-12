@@ -14,7 +14,10 @@ double flat_integrand (double x, void * params) {
      Par par = *(Par *) params;
      double beta = par.beta;
      double tau = par.tau;
-     double f = exp(x*tau) / ( 1 + exp(x*beta) );
+     double f;
+     if(tau>=0) f = 0.5*exp(x*tau) / ( 1 + exp(x*beta) );
+     else f = -0.5*exp(x*tau) / ( 1+ exp(-x*beta));
+
      return f;
 }
 
