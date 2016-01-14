@@ -1,11 +1,7 @@
 # CTQMC
-Continuous time monte carlo(CTQMC) for Anderson model segment update.
+Continuous time monte carlo(CTQMC) for Anderson model segment update. The only implemented observable is perturbation order. The output is the perturbation order histogram for each spin.
 
 Libraries:
 
     1.Eigen
 
-Status:
-
-    1.Sherman-Morrison algorithm implemented. 
-    2.Can sampling the case for ed=0, U=0, V=1 for one spin model
