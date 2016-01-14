@@ -25,7 +25,8 @@ class Local{
 
 double Local::calc_local_trace(Time_config& t_config_){
     int size = t_config_.get_pertur_order(0);
-    if(t_config_.get_t_start_at(0,size-1) > t_config_.get_t_end_at(0,size-1) ) sign = -1;
+    if(size==0) sign =1;
+    else if(t_config_.get_t_start_at(0,size-1) > t_config_.get_t_end_at(0,size-1) ) sign = -1;
     else sign = 1;
 
     return sign*sign_old;
