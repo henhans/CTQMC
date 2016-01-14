@@ -30,15 +30,17 @@ class Det {
     double calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config, int row_, int col_);
 
     // update determinat by remove a kink(for now row=col)
-    double calc_remove_det_ratio(int fl_, double beta_, Time_config& t_config, int col_);
+    double calc_remove_det_ratio(int fl_, double beta_, Time_config& t_config, int row_, int col_);
 
     // update matrix M when the move is accept
     void update_M(int fl_);
 };
 
 double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_, int row_, int col_) {
-    clog << "insert hybridization to row: " << row_ << " col:" << col_ << endl;
-    if ( row_ < 0 && col_ <0 ) {
+#ifdef DEBUG    
+    clog << "insert hybridization matrix to row: " << row_ << " col:" << col_ << endl;
+#endif
+    if ( row_ < 0 && col_ <0 ) {//if row_=-1 and col_=-1 the time configuration is empty
         double te = t_config_.get_t_end_at(fl_,0);
         double ts = t_config_.get_t_start_at(fl_,0);
         Mnew[fl_].resize(1,1);
@@ -48,12 +50,15 @@ double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_,
 #ifdef DEBUG
         clog << "M enlarged is:" << endl;
         clog << Mnew[fl_] << endl;
+        clog << endl;
 #endif        
         // return the determinant
         return 1.0/Mnew[fl_](0,0);
     }
     else {
+#ifdef DEBUG        
         clog << "old Matrix size = " << M[fl_].rows() <<" config size = "<< t_config_.get_pertur_order(fl_) << endl;
+#endif
         // ========================================================================================
         // Update the Matrix and calculate the determinant ration using Sherman-Morrison Algorithm
         // ========================================================================================
@@ -97,8 +102,6 @@ double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_,
         clog << "D_ri=" << D_ri << endl;
         clog << "D_ic=" << D_ic << endl;
         clog << "D_rc=" << D_rc << endl;
-#else
-        clog << "calculating Delta vectors..." << endl;
 #endif
 
         // Constructing require matrix to build new matrix M and calculate the detminant ratio 1/p;
@@ -122,8 +125,6 @@ double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_,
         clog << "q: " << q << endl;
         clog << "L2: " << L2 << endl;
         clog << "R2: " << R2 << endl;
-#else
-        clog << "calculating vectors L,R,L2,R2 and numbers p and q..."<<endl;
 #endif
 
         // initialize Mnew[fl_] as zero matrix
@@ -136,8 +137,8 @@ double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_,
             Mnew[fl_].block(0,0,row_,col_) = M_u_l;
         }
         else if( row_ ==0 && col_ ==0 ) {
-            MatrixXd M_l_r = M[fl_].block(0,0,row_,col_);//block matrix at the lower right of M
-            Mnew[fl_].block(1,1,row_,col_) = M_l_r;
+            MatrixXd M_l_r = M[fl_].block(0,0,M[fl_].rows(),M[fl_].cols());//block matrix at the lower right of M
+            Mnew[fl_].block(1,1,M[fl_].rows(),M[fl_].cols()) = M_l_r;
         }
         else {
             MatrixXd M_u_l = M[fl_].block(0,0,row_,col_);//block matrix at the uper left of M
@@ -149,13 +150,14 @@ double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_,
             Mnew[fl_].block( row_+1,0, M[fl_].rows() - row_ , col_ ) = M_l_l;
             Mnew[fl_].block( row_+1,col_+1, M[fl_].rows() - row_, M[fl_].cols() - col_ ) = M_l_r;
         }
+        //clog << Mnew[fl_] << endl;
+        //clog <<   p*kroneckerProduct(L2,R2)<< endl;
 
         Mnew[fl_] += p*kroneckerProduct(L2,R2); 
 #ifdef DEBUG        
         clog << "M enlarged is: " << endl;
         clog << Mnew[fl_] << endl;
-#else
-        clog << "constructing Mnew using Sherman-Morrison algorithm" << endl;
+        clog << endl;
 #endif
 
         return 1/p;
@@ -163,6 +165,73 @@ double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_,
     }
 };
 
+double Det::calc_remove_det_ratio(int fl_, double beta_, Time_config& t_config, int row_, int col_) {
+#ifdef DEBUG
+    clog << "remove hybridization matrix at row: " << row_ << " col:" << col_ << endl;
+#endif
+    //if only one segment in t_config
+    if ( t_config.get_pertur_order(fl_) == 0) {
+#ifdef DEBUG        
+        clog << "M is: " << endl;
+        clog << M[fl_] << endl;
+        clog << endl;
+#endif
+       return M[fl_](0,0)/1.0; 
+    }
+    else {
+#ifdef DEBUG
+        clog << "old Matrix size = " << M[fl_].rows() <<" config size = "<< t_config.get_pertur_order(fl_) << endl;
+#endif        
+        // ========================================================================================
+        // Update the Matrix and calculate the determinant ration using Sherman-Morrison Algorithm
+        // ========================================================================================
+
+#ifdef DEBUG
+        clog << "M is: " << endl;
+        clog << M[fl_] << endl;
+        clog << endl;
+#endif
+        // constructing Matrix Mnew
+        Mnew[fl_] = MatrixXd::Zero( M[fl_].rows()-1 , M[fl_].cols()-1 );
+        if (row_==0 && col_==0) {// remove the row=0 and col=0
+            for (int i=0; i<Mnew[fl_].rows() ; i++) 
+                for (int j=0; j<Mnew[fl_].cols() ; j++)
+                    Mnew[fl_](i,j) = M[fl_](i+1,j+1) - M[fl_](i+1,col_)*M[fl_](row_,j+1)/M[fl_](row_,col_);
+        }
+        if (row_==M[fl_].rows()-1  && col_==M[fl_].cols()-1 ) {// remove the end row and end column
+            for (int i=0; i<Mnew[fl_].rows(); i++)
+                for (int j=0; j<Mnew[fl_].cols(); j++)
+                    Mnew[fl_](i,j) = M[fl_](i,j) - M[fl_](i,col_)*M[fl_](row_,j)/M[fl_](row_,col_);
+        }
+        else {
+            //uper left
+            for (int i=0; i<row_; i++)
+                for(int j=0; j<col_; j++)
+                    Mnew[fl_](i,j) = M[fl_](i,j) - M[fl_](i,col_)*M[fl_](row_,j)/M[fl_](row_,col_);
+            //uper right
+            for (int i=row_; i<Mnew[fl_].rows(); i++)
+                for(int j=0; j<col_; j++)
+                    Mnew[fl_](i,j) = M[fl_](i+1,j) - M[fl_](i+1,col_)*M[fl_](row_,j)/M[fl_](row_,col_);
+            //lower left
+            for (int i=0; i<row_; i++)
+                for(int j=col_; j<Mnew[fl_].cols(); j++)
+                    Mnew[fl_](i,j) = M[fl_](i,j+1) - M[fl_](i,col_)*M[fl_](row_,j+1)/M[fl_](row_,col_);
+            //lower right
+            for (int i=row_; i<Mnew[fl_].rows(); i++)
+                for(int j=col_; j<Mnew[fl_].cols(); j++)
+                    Mnew[fl_](i,j) = M[fl_](i+1,j+1) - M[fl_](i+1,col_)*M[fl_](row_,j+1)/M[fl_](row_,col_);
+        }
+
+#ifdef DEBUG
+        clog << "Mnew is: " << endl;
+        clog << Mnew[fl_] << endl;
+        clog << endl;
+#endif
+        return M[fl_](row_, col_);
+    };
+};
+
+
 void Det::update_M(int fl_) {
         M[fl_] = Mnew[fl_];
-}
+};
