@@ -96,18 +96,27 @@ pair<bool, int> Time_config::try_insert_start_time( int fl_, double ts_) {
         if( (t_end[fl_][ts_size-1] < t_start[fl_][ts_size-1]) && (ts_ > t_start[fl_][ts_size-1] || ts_ <
             t_end[fl_][ts_size-1]) )
             return make_pair(false,-1);
+        //clog << "here?" <<endl;
 
         for(int i=0; i < ts_size; i++) {// then locate the insertion time
-            //clog << t_start[fl_][i] << " "<< t_end[fl_][(i-1+ts_size)%ts_size] << endl;
+            clog <<i<<" "<< ts_size<< " " <<ts_ <<" "<< t_start[fl_][i] << " "<< t_end[fl_][(i-1+ts_size)%ts_size] << endl;
             if( ts_ == t_start[fl_][i] )
                 return make_pair(false,-1);
-            else if (ts_< t_start[fl_][i] && ts_< t_end[fl_][i-1] && i>0)//
+            else if (ts_< t_start[fl_][i] && i>0 && ts_< t_end[fl_][(i-1)]/* && i>0*/) {
+                //clog << "here1?" << endl;
                 return make_pair(false,-1);
-            else if(ts_ < t_start[fl_][i] && ts_ > t_end[fl_][(i-1+ts_size)%ts_size] )
+            }
+            else if(ts_ < t_start[fl_][i] && ts_ > t_end[fl_][(i-1+ts_size)%ts_size] ) {
+                //clog << "here2?" << endl;
                 return make_pair(true,i);
-            else if (ts_ < t_start[fl_][i] && ts_ < t_end[fl_][(i-1+ts_size)%ts_size] )
+            }
+            else if (ts_ < t_start[fl_][i] && ts_ < t_end[fl_][(i-1+ts_size)%ts_size] ) {
+                //clog << "here3?" << endl;
                 return make_pair(true,i);
+            }
+            //clog << "here4?" << endl;
         }
+        //clog << "here?" << endl;
         if(ts_ > t_end[fl_][ts_size-1]) return make_pair(true,ts_size);
         else return make_pair(false,-1);
     };
