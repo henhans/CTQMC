@@ -5,6 +5,7 @@
 //This module is use to calculate hybrdization function for constant bath DOS
 struct Par {
     /*parameter passed to integral*/
+    double V;   
     double beta;
     double tau;
 };
@@ -14,14 +15,19 @@ double flat_integrand (double x, void * params) {
      Par par = *(Par *) params;
      double beta = par.beta;
      double tau = par.tau;
+     double V = par.V;
      double f;
-     if(tau>=0) f = 0.5*exp(x*tau) / ( 1 + exp(x*beta) );
-     else f = -0.5*exp(x*tau) / ( 1+ exp(-x*beta));
+
+     if(tau>=0) f = -V*V*0.5*exp(-x*(tau-beta)) / ( 1 + exp(x*beta) );
+     else f = V*V*0.5*exp(-x*tau) / ( 1+ exp(x*beta));
+     //below may be wrong formula
+     //if(tau>=0) f = V*V*0.5*exp(x*tau) / ( 1 + exp(x*beta) );
+     //else f = -V*V*0.5*exp(x*tau) / ( 1+ exp(-x*beta));
 
      return f;
 }
 
-double hyb_func_flat (double beta_, double tau_) {
+double hyb_func_flat (double V_, double beta_, double tau_) {
       /* hybridization function for flat condunction band*/
       gsl_integration_workspace * w 
       = gsl_integration_workspace_alloc (1000);
@@ -29,6 +35,7 @@ double hyb_func_flat (double beta_, double tau_) {
       double result, error;
 
       Par par;
+      par.V = V_;
       par.beta = beta_;
       par.tau = tau_;
 
