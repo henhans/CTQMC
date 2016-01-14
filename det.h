@@ -27,16 +27,16 @@ class Det {
     void print_M(int fl_) { clog << M[fl_] << endl;};
 
     // update determinant by insert a kink(for now row=col)
-    double calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config, int row_, int col_);
+    double calc_insert_det_ratio(int fl_, double V_, double beta_, Time_config& t_config, int row_, int col_);
 
     // update determinat by remove a kink(for now row=col)
-    double calc_remove_det_ratio(int fl_, double beta_, Time_config& t_config, int row_, int col_);
+    double calc_remove_det_ratio(int fl_, double V_,double beta_, Time_config& t_config, int row_, int col_);
 
     // update matrix M when the move is accept
     void update_M(int fl_);
 };
 
-double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_, int row_, int col_) {
+double Det::calc_insert_det_ratio(int fl_, double V_, double beta_, Time_config& t_config_, int row_, int col_) {
 #ifdef DEBUG    
     clog << "insert hybridization matrix to row: " << row_ << " col:" << col_ << endl;
 #endif
@@ -44,8 +44,7 @@ double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_,
         double te = t_config_.get_t_end_at(fl_,0);
         double ts = t_config_.get_t_start_at(fl_,0);
         Mnew[fl_].resize(1,1);
-        if( te > ts) Mnew[fl_](0,0) = hyb_func_flat(beta_, te-ts) ;
-        else Mnew[fl_](0,0) = -1.*hyb_func_flat(beta_, te+beta_-ts) ;
+        Mnew[fl_](0,0) = (ts>te) ? hyb_func_flat(V_, beta_, ts-te) : -1.*hyb_func_flat(V_, beta_, ts+beta_-te);
 
 #ifdef DEBUG
         clog << "M enlarged is:" << endl;
@@ -80,10 +79,8 @@ double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_,
             double ts_c = t_config_.get_t_start_at(fl_,col_);//ts fix col
             double te_c = t_config_.get_t_end_at(fl_,i);//te fix col
             //clog << "ts_r=" << ts_r << "  te_r=" << te_r << "  ts_c=" << ts_c << "  te_c=" << te_c << endl;
-            if ( te_r > ts_r) D_ri(0,i) = hyb_func_flat( beta_, te_r - ts_r );
-            else D_ri(0,i) = -1.*hyb_func_flat( beta_, te_r+beta_ - ts_r );
-            if ( te_c > ts_c) D_ic(i,0) = hyb_func_flat(beta_, te_c - ts_c);
-            else D_ic(i,0) = -1.*hyb_func_flat( beta_, te_c+beta_ - ts_c );
+            D_ri(0,i) =(ts_r>te_r) ? hyb_func_flat(V_, beta_,ts_r-te_r) : -1.*hyb_func_flat(V_, beta_,ts_r+beta_-te_r);
+            D_ic(i,0) =(ts_c>te_c) ? hyb_func_flat(V_, beta_,ts_c-te_c) : -1.*hyb_func_flat(V_, beta_,ts_c+beta_-te_c);
         }
         for( int i=row_+1; i<M[fl_].rows()+1; i++) {
             double ts_r = t_config_.get_t_start_at(fl_,i);//ts fix row
@@ -91,13 +88,13 @@ double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_,
             double ts_c = t_config_.get_t_start_at(fl_,col_);//ts fix col
             double te_c = t_config_.get_t_end_at(fl_,i);//te fix col
             //clog << "  ts_r=" << ts_r << "  te_r=" << te_r << "  ts_c=" << ts_c << "  te_c=" << te_c << endl;
-            D_ri(0,i-1) = (te_r > ts_r) ? hyb_func_flat( beta_, te_r - ts_r ) : -1.*hyb_func_flat( beta_, te_r+beta_ - ts_r );
-            D_ic(i-1,0) = (te_c > ts_c) ? hyb_func_flat( beta_, te_c - ts_c ) : -1.*hyb_func_flat( beta_, te_c+beta_ - ts_c );
+            D_ri(0,i-1) =(ts_r > te_r) ? hyb_func_flat(V_, beta_, ts_r-te_r ) : -1.*hyb_func_flat(V_,beta_,ts_r+beta_-te_r );
+            D_ic(i-1,0) =(ts_c > te_c) ? hyb_func_flat(V_, beta_, ts_c-te_c ) : -1.*hyb_func_flat(V_,beta_,ts_c+beta_-te_c );
             //clog << "D_ri=" << D_ri(0,i-1) << " "<< " D_ic=" << D_ic(i-1,0) << endl;
         }
         double ts = t_config_.get_t_start_at(fl_,col_);
         double te = t_config_.get_t_end_at(fl_,row_);
-        D_rc = (te >ts ) ? hyb_func_flat( beta_, te -ts): -1.*hyb_func_flat( beta_, te + beta_ -ts);
+        D_rc = (ts >te ) ? hyb_func_flat(V_, beta_, ts -te): -1.*hyb_func_flat(V_, beta_, ts + beta_ -te);
 #ifdef DEBUG
         clog << "D_ri=" << D_ri << endl;
         clog << "D_ic=" << D_ic << endl;
@@ -165,7 +162,7 @@ double Det::calc_insert_det_ratio(int fl_, double beta_, Time_config& t_config_,
     }
 };
 
-double Det::calc_remove_det_ratio(int fl_, double beta_, Time_config& t_config, int row_, int col_) {
+double Det::calc_remove_det_ratio(int fl_, double V_, double beta_, Time_config& t_config, int row_, int col_) {
 #ifdef DEBUG
     clog << "remove hybridization matrix at row: " << row_ << " col:" << col_ << endl;
 #endif
