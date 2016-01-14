@@ -39,15 +39,15 @@ class Ctqmc{
     // Initialize the Ctqmc class
     Ctqmc(Common& common_, RanGSL& random_, Time_config& t_config_, Local& local_, Det& det_): common(common_), 
     random(random_), t_config(t_config_), local(local_), det(det_), t_config_old(common_.flavor)
-    {   /*clog << "ctqm initialized parameters:" << endl;
+    {   clog << "ctqm initialized parameters:" << endl;
         clog << "flavor=" << common.flavor << endl;
         clog << "max_steps=" << common.max_steps << endl;
         clog << "U=" << common.U << endl;
         clog << "ed=" << common.ed << endl;
-        clog << "t=" << common.t << endl;
+        clog << "V=" << common.V << endl;
         clog << "beta=" << common.beta << endl;
         clog << "minM=" << common.minM << endl;
-        clog << "minD=" << common.minD << endl;*/
+        clog << "minD=" << common.minD << endl;
         hist.resize(common.flavor);// resize the histogram to the number of flavor
         accept = 0;// initialize accepted proposal to 0
     };
@@ -56,17 +56,19 @@ class Ctqmc{
     void sampling();
     // output histogram
     void output_hist();
+    // calculate average observables
+    void average();
 
     private:
     // Insert a kink
-    void insert_a_kink(int fl_);
+    void insert_a_kink(int fl_, bool wup_);// first index for selected flavor, second is flag for warmup
     // remove a kink
-    void remove_a_kink(int fl_);
+    void remove_a_kink(int fl_, bool wup_);
 };
 
-void Ctqmc::insert_a_kink(int fl_)
+void Ctqmc::insert_a_kink(int fl_, bool wup_)
 {
-    int fl = fl_; //fist consider only one flavor
+    int fl = fl_;
 
     //clog << "copied old config" << endl;
     t_config_old=t_config;
@@ -84,9 +86,11 @@ void Ctqmc::insert_a_kink(int fl_)
 
     pair<bool, int> accept_index;// storing accept condition and insert index for insertion (accept_condition, insert_index)
     pair<double, int> nextts_index;// storing next t start and the index for insertion (next_ts, index_for_next_ts)
+
     accept_index = t_config.try_insert_start_time(fl, ts);
+
     while(!accept_index.first) {
-//        clog << "ts propose=" << ts << endl;
+        //clog << "ts propose=" << ts << endl;
         ts = common.beta*random();
         assert(ts <= common.beta && ts >= 0.);
         accept_index = t_config.try_insert_start_time(fl, ts);
@@ -124,10 +128,10 @@ void Ctqmc::insert_a_kink(int fl_)
 #endif
 
     // calculate the matrix M and determinant
-    double det_ratio = det.calc_insert_det_ratio( fl, common.beta , t_config, accept_index.second, accept_index.second );
+    double det_ratio = det.calc_insert_det_ratio( fl, common.V ,common.beta , t_config, accept_index.second, accept_index.second );
 
     // calculate the local trace
-    double local_trace= local.calc_local_trace(t_config);
+    double local_trace= local.calc_insert_local_trace(fl, t_config, accept_index.second);
 
     // Metropolis algorithm
     int k = t_config.get_pertur_order(fl);//perturbation order, already is k+1 in literature 
@@ -138,25 +142,25 @@ void Ctqmc::insert_a_kink(int fl_)
     if( abs(accept_rate) >= 1 || random() < abs(accept_rate) ) { // accept new configuration
         //clog << "accept!" << endl;
         det.update_M(fl);
-        local.update_trace();
+        local.update_trace(fl);
         accept+=1;//increase accepted proposal
-        if(hist[fl_].count(k)) hist[fl_][k]+=1; //check if the perturb order is in the histogram
-        else hist[fl_][k]=1;// else set histogram to 1
+        if(hist[fl_].count(k) && !wup_) hist[fl_][k]+=1; //check if the perturb order is in the histogram
+        else if(!wup_) hist[fl_][k]=1;// else set histogram to 1
     }
     else { // keep current configuration
         //clog << "reject!" << endl;
         t_config = t_config_old;
-        if(hist[fl_].count(k-1)) hist[fl_][k-1]+=1; //check if the perturb order is in the histogram
-        else hist[fl_][k-1]=1;// else set histogram to 1
+        if(hist[fl_].count(k-1) && !wup_) hist[fl_][k-1]+=1; //check if the perturb order is in the histogram
+        else if(!wup_) hist[fl_][k-1]=1;// else set histogram to 1
     }
     //clog << "Matrix M is" << endl;
     //det.print_M(fl);
 
 };
 
-void Ctqmc::remove_a_kink(int fl_)
+void Ctqmc::remove_a_kink(int fl_, bool wup_)
 {
-    int fl = fl_; // first consider only one falvor
+    int fl = fl_; 
     int pertur_order = t_config.get_pertur_order(fl); 
     int index_to_remove = int( (pertur_order-1)*random());
 
@@ -194,10 +198,10 @@ void Ctqmc::remove_a_kink(int fl_)
 #endif 
 
     // calculate the matrix M and determinant
-    double det_ratio = det.calc_remove_det_ratio( fl, common.beta , t_config, index_to_remove, index_to_remove );
+    double det_ratio = det.calc_remove_det_ratio( fl, common.V, common.beta , t_config, index_to_remove, index_to_remove );
 
     // calculate the local trace
-    double local_trace= local.calc_local_trace(t_config);
+    double local_trace= local.calc_remove_local_trace(fl, t_config_old, index_to_remove);
 
     // Metropolis algorithm
     double accept_rate = pertur_order*local_trace*det_ratio/(lmax*common.beta);
@@ -207,42 +211,52 @@ void Ctqmc::remove_a_kink(int fl_)
     if( abs(accept_rate) >= 1 || random() < abs(accept_rate) ) { // accept new configuration
         //clog << "accept!" << endl;
         det.update_M(fl);
-        local.update_trace();
+        local.update_trace(fl);
         accept+=1;
-        if(hist[fl_].count(pertur_order-1)) hist[fl_][pertur_order-1]+=1; //check if the perturb order is in the histogram
-        else hist[fl_][pertur_order-1]=1;// else set histogram to 1
+        if(hist[fl_].count(pertur_order-1) && !wup_) hist[fl_][pertur_order-1]+=1; //check if the perturb order is in the histogram
+        else if(!wup_) hist[fl_][pertur_order-1]=1;// else set histogram to 1
     }
     else { // keep current configuration
         //clog << "reject!" << endl;
         t_config = t_config_old;
-        if(hist[fl_].count(pertur_order)) hist[fl_][pertur_order]+=1; //check if the perturb order is in the histogram
-        else hist[fl_][pertur_order]=1;// else set histogram to 1
+        if(hist[fl_].count(pertur_order) && !wup_) hist[fl_][pertur_order]+=1; //check if the perturb order is in the histogram
+        else if(!wup_) hist[fl_][pertur_order]=1;// else set histogram to 1
     }
 
 };
 
 void Ctqmc::sampling()
 {
-    int fl = 0;
+    int fl;
+    bool wup = true;// if warmup or not
+
     for(int step=0; step<common.max_steps; step++) {
+        if (step>common.warmup) wup = false;
 #ifndef DEBUG        
-        if(step%100==0)
+        if(step%1000==0 && !wup)
 #endif            
             clog <<"====================== ctqmc step: " <<step <<"  beta=" << common.beta <<" ========================" << endl;
         double rand = random();
+        fl = int( random()*common.flavor );//random choose one flavor for insert or delete
+
+#ifdef DEBUG        
+        clog <<"insert/remove to fl=" << fl << endl;
+#endif            
 
         if(rand > 0.5) {
-            //clog <<"-------------------------------- insert a kink ------------------------------------" << endl;
-            insert_a_kink(fl);
-//        clog <<"-------------------------------- insert a kink ------------------------------------" << endl;
-//           insert_a_kink(fl);
-//        clog <<"-------------------------------- insert a kink ------------------------------------" << endl;
-//           insert_a_kink(fl);
+#ifdef DEBUG            
+            clog <<"-------------------------------- insert a kink ------------------------------------" << endl;
+#endif       
+            insert_a_kink(fl,wup);
+//           insert_a_kink(fl,wup);
+//           insert_a_kink(fl,wup);
         }
         else {
-            //clog <<"-------------------------------- remove a kink ------------------------------------" << endl;
+#ifdef DEBUG       
+            clog <<"-------------------------------- remove a kink ------------------------------------" << endl;
+#endif           
             if(t_config.get_pertur_order(fl) != 0 )
-                remove_a_kink(fl);
+                remove_a_kink(fl,wup);
         };
     };
     clog <<"========================= MC simulation done! ================================"<< endl;
@@ -255,7 +269,11 @@ void Ctqmc::output_hist(){
         ofstream histout;
         ostringstream convert;
         convert << i;
-        string filename = "hist"+convert.str()+".dat";
+        string filename = "hist_fl"+convert.str();
+        convert.str(" ");
+        convert.clear();
+        convert << common.beta;
+        filename += "_beta"+convert.str()+".dat";
         histout.open(filename.c_str());
         for(map<int,int>::iterator it = hist[i].begin(); it!=hist[i].end(); it++)
            histout << it->first <<"\t" << it->second << endl;
@@ -263,24 +281,38 @@ void Ctqmc::output_hist(){
     }    
 }
 
+void Ctqmc::average(){
+    for(int i=0; i<common.flavor; i++) {
+        double sum_k=0;
+        double sum_steps=0;
+        for(map<int,int>::iterator it = hist[i].begin(); it!=hist[i].end(); it++) {
+            sum_k += (it->first)*(it->second);
+            sum_steps+=it->second;
+        }
+        clog<<"fl="<<i <<" sum_k="<< sum_k <<" sum_steps="<< sum_steps << " averaged order=" << sum_k/sum_steps<<endl;
+    }    
+}
+
+
 int main(int argc, char* argv[]) {
-    if (argc < 3){
-        cerr << "input parameters: max_steps, beta" << endl;
+    if (argc < 6){
+        cerr << "input parameters: max_steps, beta, U, ed, V" << endl;
         return 1;
     }
-    int flavor = 1; // flavor(spin)
+    int flavor = 2; // flavor(spin)
     int max_steps = atoi(argv[1]);
-    double U = 0.0; // interaction
-    double ed = -0.0;// impurity level
-    double t = 0.5; // hopping
-    double beta = atoi(argv[2]); // inverse temperature
+    double beta = atof(argv[2]); // inverse temperature
+    double U = atof(argv[3]); // interaction
+    double ed = atof(argv[4]);// impurity level
+    double V = atof(argv[5]); // hopping
     double minM = 1e-10;
     double minD = 1e-10;
     int seed = 1452654131;//time(0);//123456;//time(0);
+    int warmup = 50000;
 
     // initialize and set the common parameters share between calsses
     Common common;
-    common.set_params(flavor, max_steps, U, ed, t, beta, minM, minD);
+    common.set_params(flavor, max_steps, U, ed, V, beta, minM, minD, warmup);
     // initialize random number generator
     clog << "starting with seed:" << seed << endl;
     RanGSL random(seed); 
@@ -292,6 +324,7 @@ int main(int argc, char* argv[]) {
     Ctqmc ctqmc(common, random, t_config, local, det);// initialize ctqmc class
     ctqmc.sampling();// perform Monte Carlo sampling
     ctqmc.output_hist();// output histogram
+    ctqmc.average();//calculate average observable
 
     return 0;
 }
@@ -301,7 +334,8 @@ int Common::flavor;
 int Common::max_steps;
 double Common::U;    
 double Common::ed;
-double Common::t;
+double Common::V;
 double Common::beta;
 double Common::minM;
 double Common::minD;
+double Common::warmup;
