@@ -4,4 +4,5 @@ Continuous time monte carlo(CTQMC) for Anderson model segment update. The only i
 Libraries:
 
     1.Eigen
+    2.gsl
 
