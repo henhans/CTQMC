@@ -87,7 +87,7 @@ double Local::calc_insert_local_trace(int fl_, Time_config& t_config_, int index
     exp_ed = exp(-ed*lseg);
     exp_U = exp(-U*lov);
 
-    return sign[fl_]*sign_old[fl_]*exp_ed*exp_U;
+    return sign[fl_]*sign_old[fl_];//*exp_ed*exp_U;
 };
 
 double Local::calc_remove_local_trace(int fl_, Time_config& t_config_, int index_){
@@ -142,7 +142,7 @@ double Local::calc_remove_local_trace(int fl_, Time_config& t_config_, int index
     exp_ed = exp(ed*lseg);
     exp_U = exp(U*lov);
 
-    return sign[fl_]*sign_old[fl_]*exp_ed*exp_U;
+    return sign[fl_]*sign_old[fl_];//*exp_ed*exp_U;
 };
 
 
