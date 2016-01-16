@@ -5,4 +5,5 @@ Libraries:
 
     1.Eigen
     2.gsl
+    3.openmp
 
