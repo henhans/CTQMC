@@ -13,6 +13,7 @@
 #include "random.h"
 #include "common.h"
 #include <omp.h>
+//#include "mpi.h"
 #include <cstdlib>
 #include <cassert>
 #include <complex>
@@ -31,11 +32,13 @@ class Ctqmc{
     Time_config t_config_old;// time configuration for storing temporary old configuration
     Local& local;// local trace class
     Det& det;// hybridization determinant class
-    vector<map<int,int > > hist;// histogram of the accumulated perturbation order, index of vector is for flavor,
     //key of map is for perturbation order, the value stores the apears time for each perturbation order
-    int accept;//number of accepted proposal
+    vector<int> accept;//number of accepted proposal
+    vector<int> num_moves;
 
     public:
+    vector<map<int,int > > hist;// histogram of the accumulated perturbation order, index of vector is for flavor,
+
     // Initialize the Ctqmc class
     Ctqmc(Common& common_, RanGSL& random_, Time_config& t_config_, Local& local_, Det& det_): common(common_), 
     random(random_), t_config(t_config_), local(local_), det(det_), t_config_old(common_.flavor)
@@ -49,7 +52,12 @@ class Ctqmc{
         clog << "minM=" << common.minM << endl;
         clog << "minD=" << common.minD << endl;
         hist.resize(common.flavor);// resize the histogram to the number of flavor
-        accept = 0;// initialize accepted proposal to 0
+        accept.resize(common.flavor);
+        num_moves.resize(common.flavor);
+        for(int i=0; i<common.flavor; i++) {
+            accept[i] = 0;// initialize accepted proposal to 0
+            num_moves[i] = 0;
+        }
     };
 
     // doing monte carlo sampling
@@ -131,7 +139,8 @@ void Ctqmc::insert_a_kink(int fl_, bool wup_)
     double det_ratio = det.calc_insert_det_ratio( fl, common.V ,common.beta , t_config, accept_index.second, accept_index.second );
 
     // calculate the local trace
-    double local_trace= local.calc_insert_local_trace(fl, t_config, accept_index.second);
+    //double local_trace= local.calc_insert_local_trace(fl, t_config, accept_index.second);
+    double local_trace= local.calc_local_trace(fl,t_config);
 
     // Metropolis algorithm
     int k = t_config.get_pertur_order(fl);//perturbation order, already is k+1 in literature 
@@ -143,13 +152,15 @@ void Ctqmc::insert_a_kink(int fl_, bool wup_)
         //clog << "accept!" << endl;
         det.update_M(fl);
         local.update_trace(fl);
-        accept+=1;//increase accepted proposal
+        accept[fl]+=1;//increase accepted proposal
+        num_moves[fl] += 1;
         if(hist[fl_].count(k) && !wup_) hist[fl_][k]+=1; //check if the perturb order is in the histogram
         else if(!wup_) hist[fl_][k]=1;// else set histogram to 1
     }
     else { // keep current configuration
         //clog << "reject!" << endl;
         t_config = t_config_old;
+        num_moves[fl] += 1;
         if(hist[fl_].count(k-1) && !wup_) hist[fl_][k-1]+=1; //check if the perturb order is in the histogram
         else if(!wup_) hist[fl_][k-1]=1;// else set histogram to 1
     }
@@ -201,7 +212,8 @@ void Ctqmc::remove_a_kink(int fl_, bool wup_)
     double det_ratio = det.calc_remove_det_ratio( fl, common.V, common.beta , t_config, index_to_remove, index_to_remove );
 
     // calculate the local trace
-    double local_trace= local.calc_remove_local_trace(fl, t_config_old, index_to_remove);
+    //double local_trace= local.calc_remove_local_trace(fl, t_config_old, index_to_remove);
+    double local_trace= local.calc_local_trace(fl,t_config);
 
     // Metropolis algorithm
     double accept_rate = pertur_order*local_trace*det_ratio/(lmax*common.beta);
@@ -212,13 +224,15 @@ void Ctqmc::remove_a_kink(int fl_, bool wup_)
         //clog << "accept!" << endl;
         det.update_M(fl);
         local.update_trace(fl);
-        accept+=1;
+        accept[fl]+=1;
+        num_moves[fl] +=1;
         if(hist[fl_].count(pertur_order-1) && !wup_) hist[fl_][pertur_order-1]+=1; //check if the perturb order is in the histogram
         else if(!wup_) hist[fl_][pertur_order-1]=1;// else set histogram to 1
     }
     else { // keep current configuration
         //clog << "reject!" << endl;
         t_config = t_config_old;
+        num_moves[fl] +=1;
         if(hist[fl_].count(pertur_order) && !wup_) hist[fl_][pertur_order]+=1; //check if the perturb order is in the histogram
         else if(!wup_) hist[fl_][pertur_order]=1;// else set histogram to 1
     }
@@ -227,18 +241,21 @@ void Ctqmc::remove_a_kink(int fl_, bool wup_)
 
 void Ctqmc::sampling()
 {
-    int fl;
+    int fl,step;
+    double rand;
     bool wup = true;// if warmup or not
 
     for(int step=0; step<common.max_steps; step++) {
         if (step>common.warmup) wup = false;
 #ifndef DEBUG        
-        if(step%1000==0 && !wup)
+        if(step% (common.max_steps/100)==0 && !wup)
 #endif            
             clog <<"====================== ctqmc step: " <<step <<"  beta=" << common.beta <<" ========================" << endl;
-        double rand = random();
+        rand = random();
         fl = int( random()*common.flavor );//random choose one flavor for insert or delete
-
+         //swithc to the flavor with lower sucess rate       
+        if(accept[fl]>accept[(fl+1)%common.flavor]) 
+            fl=(fl+1)%common.flavor; 
 #ifdef DEBUG        
         clog <<"insert/remove to fl=" << fl << endl;
 #endif            
@@ -260,8 +277,10 @@ void Ctqmc::sampling()
         };
     };
     clog <<"========================= MC simulation done! ================================"<< endl;
-    clog <<"accepted move=" << accept << " total MC step=" << common.max_steps << " accept rate=";
-    clog <<double(accept)/double(common.max_steps)*100<< "%" <<endl; 
+    for(int i=0; i<common.flavor; i++) {
+        clog <<"fl="<<fl <<" accepted move=" << accept[i] << " total MC step=" << num_moves[i] << " accept rate=";
+        clog <<double(accept[i])/double(num_moves[i])*100<< "%" <<endl; 
+    }
 };
 
 void Ctqmc::output_hist(){
@@ -293,12 +312,55 @@ void Ctqmc::average(){
     }    
 }
 
+//reduce the data from all the threads
+void omp_reduce(vector<map<int,int> >& hist_tot_, vector<map<int,int> > hist_, Common& common )
+{
+    for(int i=0; i<common.flavor; i++) {
+        for(map<int,int>::iterator it = hist_[i].begin(); it!=hist_[i].end(); it++) {
+           if( !hist_tot_[i].count(it->first) ) hist_tot_[i][it->first]=it->second;
+           else hist_tot_[i][it->first]+=it->second;
+        }
+    }
+
+};
+
+//do statistica averaging
+void average(vector<map<int,int> >& hist_, Common& common){
+    for(int i=0; i<common.flavor; i++) {
+        double sum_k=0;
+        double sum_steps=0;
+        for(map<int,int>::iterator it = hist_[i].begin(); it!=hist_[i].end(); it++) {
+            sum_k += (it->first)*(it->second);
+            sum_steps+=it->second;
+        }
+        clog<<"fl="<<i <<" sum_k="<< sum_k <<" sum_steps="<< sum_steps << " averaged order=" << sum_k/sum_steps<<endl;
+    }    
+};
+
+void output_hist(vector<map<int,int> >& hist_, Common& common){
+    for(int i=0; i<common.flavor; i++) {
+        ofstream histout;
+        ostringstream convert;
+        convert << i;
+        string filename = "hist_fl"+convert.str();
+        convert.str(" ");
+        convert.clear();
+        convert << common.beta;
+        filename += "_beta"+convert.str()+".dat";
+        histout.open(filename.c_str());
+        for(map<int,int>::iterator it = hist_[i].begin(); it!=hist_[i].end(); it++)
+           histout << it->first <<"\t" << it->second << endl;
+        histout.close();   
+    }    
+}
 
 int main(int argc, char* argv[]) {
     if (argc < 6){
         cerr << "input parameters: max_steps, beta, U, ed, V" << endl;
         return 1;
     }
+
+
     int flavor = 2; // flavor(spin)
     int max_steps = atoi(argv[1]);
     double beta = atof(argv[2]); // inverse temperature
@@ -307,25 +369,46 @@ int main(int argc, char* argv[]) {
     double V = atof(argv[5]); // hopping
     double minM = 1e-10;
     double minD = 1e-10;
-    int seed = 1452654131;//time(0);//123456;//time(0);
+    int seed = time(0);//1452654131;//time(0);//123456;//time(0);
     int warmup = 50000;
-
-    // initialize and set the common parameters share between calsses
     Common common;
     common.set_params(flavor, max_steps, U, ed, V, beta, minM, minD, warmup);
-    // initialize random number generator
-    clog << "starting with seed:" << seed << endl;
-    RanGSL random(seed); 
+    vector<map<int,int > > hist_tot(2);
 
-    Time_config t_config(common.flavor);// initial time configuration class
-    Local local(common.flavor, common.U, common.ed, common.beta);// initialize local trace class
-    Det det(common.flavor);// initialize the deteminant class
+#ifdef _OMP
+    #pragma omp parallel private(seed,common)
+    {
+        clog << "I am thread " << omp_get_thread_num()<<endl;;
+        seed = time(0)*5 + 3*omp_get_thread_num();//2321421+ 18*omp_get_thread_num();
+#endif        
+        // initialize and set the common parameters share between calsses
+        // initialize random number generator
+        clog << "starting with seed:" << seed << endl;
+        RanGSL random(seed); 
 
-    Ctqmc ctqmc(common, random, t_config, local, det);// initialize ctqmc class
-    ctqmc.sampling();// perform Monte Carlo sampling
-    ctqmc.output_hist();// output histogram
-    ctqmc.average();//calculate average observable
+        Time_config t_config(common.flavor);// initial time configuration class
+        Local local(common.flavor, common.U, common.ed, common.beta);// initialize local trace class
+        Det det(common.flavor);// initialize the deteminant class
+    
+        Ctqmc ctqmc(common, random, t_config, local, det);// initialize ctqmc class
+        ctqmc.sampling();// perform Monte Carlo sampling
+#ifndef _OMP       
+        ctqmc.output_hist();// output histogram
+        ctqmc.average();//calculate average observable
+#endif        
+#ifdef _OMP
+        #pragma omp barrier
+        #pragma omp critical
+        {            
+            omp_reduce(hist_tot,ctqmc.hist,common);
+        }
 
+    }
+    average(hist_tot,common);
+    output_hist(hist_tot,common);
+#endif
+
+    //MPI_finalize();
     return 0;
 }
 
