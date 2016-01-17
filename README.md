@@ -3,9 +3,9 @@ Continuous time monte carlo(CTQMC) hybridization algorithm for Anderson model se
 
 Data structure:
 
-    config.h: Class for storing and updating time configurations. Currently only add one kink and remove one kink is implemented.
-    det.h: Class for storing and updating local matrices using Sherman-Morrison Algorithm.
-    local.h: Class for calculating local trace by segment picture.
+config.h: Class for storing and updating time configurations. Currently only add one kink and remove one kink is implemented.
+det.h: Class for storing and updating local matrices using Sherman-Morrison Algorithm.
+local.h: Class for calculating local trace by segment picture.
 
 Libraries:
 
